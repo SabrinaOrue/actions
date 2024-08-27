@@ -64,47 +64,51 @@ runs:
 
     - name: Publish to store
       id: publish
-      run: |
-        echo "Publishing to store"
-        echo "appName: ${{ inputs.appName }}"
-        echo "appVersion: ${{ inputs.appVersion }}"
-        echo "environment: ${{ inputs.environment }}"
-        echo "artifact_name: ${{ inputs.artifact_name }}"
-        echo "isProd: ${{ inputs.isProd }}"
-        echo "gitOpsUrl: ${{ inputs.gitOpsUrl }}"
+  run: |
+    echo "Publishing to store"
+    echo "appName: ${{ inputs.appName }}"
+    echo "appVersion: ${{ inputs.appVersion }}"
+    echo "environment: ${{ inputs.environment }}"
+    echo "artifact_name: ${{ inputs.artifact_name }}"
+    echo "isProd: ${{ inputs.isProd }}"
+    echo "gitOpsUrl: ${{ inputs.gitOpsUrl }}"
 
-        # Set Organization and RepositoryName from GitHub context
-        ORGANIZATION="${{ github.repository_owner }}"
-        REPOSITORY="${{ github.repository }}"
+    # Set Organization and RepositoryName from GitHub context
+    ORGANIZATION="${{ github.repository_owner }}"
+    REPOSITORY="${{ github.repository }}"
 
-        response=$(curl -X POST "${{ inputs.gitOpsUrl }}/api/v1/app-distribution" \
-              -H "accept: application/json" \
-              -H "Content-Type: multipart/form-data" \
-              -F "Organization=$ORGANIZATION" \
-              -F "RepositoryName=$REPOSITORY" \
-              -F "AppName=${{ inputs.appName }}" \
-              -F "Version=${{ inputs.appVersion }}" \
-              -F "EnvironmentName=${{ inputs.environment }}" \
-              -F "IsEnvironmentProduction=${{ inputs.isProd }}" \
-              -F "DeploymentName=${{ inputs.environment }}" \
-              -F "File=@app/${{ inputs.filename }}")
+    response=$(curl -X POST "${{ inputs.gitOpsUrl }}/api/v1/app-distribution" \
+          -H "accept: application/json" \
+          -H "Content-Type: multipart/form-data" \
+          -F "Organization=$ORGANIZATION" \
+          -F "RepositoryName=$REPOSITORY" \
+          -F "AppName=${{ inputs.appName }}" \
+          -F "Version=${{ inputs.appVersion }}" \
+          -F "EnvironmentName=${{ inputs.environment }}" \
+          -F "IsEnvironmentProduction=${{ inputs.isProd }}" \
+          -F "DeploymentName=${{ inputs.environment }}" \
+          -F "File=@app/${{ inputs.filename }}" \
+          --connect-timeout 30 \
+          --max-time 60 \
+          -w "%{http_code}" \
+          -o response_body.txt)
 
-        echo "API Response: $response"
+    echo "API Response: $(<response_body.txt)"
 
-        # Extraer el status_code de la respuesta
-        status_code=$(echo "$response" | jq -r '.statusCode')
+    # Extraer el status_code de la respuesta
+    status_code=$(cat response_body.txt | jq -r '.statusCode')
 
-        # Validar si el status_code está vacío o es nulo
-        if [ -z "$status_code" ]; then
-          echo "Error: Invalid API response or status code not found"
-          exit 1
-        fi
+    # Validar si el status_code está vacío o es nulo
+    if [ -z "$status_code" ]; then
+      echo "Error: Invalid API response or status code not found"
+      exit 1
+    fi
 
-        if [ "$status_code" -eq 200 ]; then
-          id=$(echo "$response" | jq -r '.id')
-          echo "aplicacion_id=$id" >> $GITHUB_OUTPUT
-        else
-          echo "Error: $response"
-          exit 1
-        fi
-      shell: bash
+    if [ "$status_code" -eq 200 ]; then
+      id=$(cat response_body.txt | jq -r '.id')
+      echo "aplicacion_id=$id" >> $GITHUB_OUTPUT
+    else
+      echo "Error: $(cat response_body.txt)"
+      exit 1
+    fi
+  shell: bash
